@@ -95,15 +95,21 @@ void init_timer_2(void)
 {
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;     //enable clock to Timer 2
 	RCC->AHBENR |= RCC_AHBENR_GPIOBEN;      //enable clock to PB
-	GPIOB->MODER |= GPIO_MODER_MODER10_1;   //set B10 to alternate function'
+	GPIOB->MODER |= GPIO_MODER_MODER10_1;   //set B10 to alternate function
+	GPIOB->MODER |= GPIO_MODER_MODER11_1;   //set B11 to alternate function
 	GPIOB->AFR[1] |= 0b1000000000;          //set AFR to AFR10 for B10
+	GPIOB->AFR[1] |= 0b10000000000000;      //set AFR to AFR11 for B11
 
 	TIM2->PSC = 3;                          //ARR < 2^16
 	TIM2->ARR = 1023;                       //(1/15000)/(1/48000000)
 	TIM2->CCMR2 |= TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3PE; //configure PWM
+	TIM2->CCMR2 |= TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4PE; //configure PWM
 	TIM2->CCER |= TIM_CCER_CC3E;                                          //Enabling CC Output
+	TIM2->CCER |= TIM_CCER_CC4E;                                          //Enabling CC Output
 	TIM2->CR1 |= TIM_CR1_CEN;                                             //Enable Timer 2
-	TIM2->CCR3 = duty_cycle;                                                  //25% duty cycle
+	TIM2->CCR3 = duty_cycle;                //duty cycle for B10 controlled by pot A6
+	TIM2->CCR4 = (3*1023)/4;                //75% duty cycle
+
 }
 
 void init_timer_6(void)
