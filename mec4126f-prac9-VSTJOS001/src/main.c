@@ -16,13 +16,15 @@
 #include "stm32f0xx.h"
 
 // GLOBAL VARIABLES ----------------------------------------------------------|
-
+uint16_t duty_cycle;
 
 // FUNCTION DECLARATIONS -----------------------------------------------------|
 
 void main(void);                                                   //COMPULSORY
 void init_ADC(void);											   //COMPULSORY
 void init_timer_2(void);
+void init_timer_6(void);
+void TIM6_DAC_IRQHandler(void);
 #ifdef TRUESTUDIO												   //COMPULSORY
 	void reset_clock_to_48Mhz(void);							   //COMPULSORY
 #endif															   //COMPULSORY
@@ -37,6 +39,7 @@ void main(void)
 	reset_clock_to_48Mhz();										   //COMPULSORY
 #endif															   //COMPULSORY
 	init_timer_2();
+	init_timer_6();
 
 	while(1)
 	{
@@ -81,9 +84,9 @@ void init_ADC(void)
 	//
 	ADC1->CHSELR |= ADC_CHSELR_CHSEL6;
 	// Setup in wait mode
-	ADC1->CFGR1 |= ADC_CFGR1_WAIT;
+	ADC1->CFGR1 &= ~ADC_CFGR1_CONT;
 	// Setup 10 bit resolution
-
+	ADC1->CFGR1 |= ADC_CFGR1_RES_0;
 	//
 	while((ADC1->ISR & ADC_ISR_ADRDY) == 0);
 }
@@ -95,22 +98,34 @@ void init_timer_2(void)
 	GPIOB->MODER |= GPIO_MODER_MODER10_1;   //set B10 to alternate function'
 	GPIOB->AFR[1] |= 0b1000000000;          //set AFR to AFR10 for B10
 
-	TIM2->PSC = 0;                          //ARR < 2^16
-	TIM2->ARR = 3200;                       //(1/15000)/(1/48000000)
+	TIM2->PSC = 3;                          //ARR < 2^16
+	TIM2->ARR = 1023;                       //(1/15000)/(1/48000000)
 	TIM2->CCMR2 |= TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3PE; //configure PWM
 	TIM2->CCER |= TIM_CCER_CC3E;                                          //Enabling CC Output
 	TIM2->CR1 |= TIM_CR1_CEN;                                             //Enable Timer 2
-	TIM2->CCR3 = 3200/4;                                                  //25% duty cycle
+	TIM2->CCR3 = duty_cycle;                                                  //25% duty cycle
 }
 
 void init_timer_6(void)
 {
-
+	//Enable Timer 6 clock
+	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
+	//Setting up delay for interrupt
+	TIM6->PSC = 36;
+	TIM6->ARR = 66667;
+	//Allow overflow interrupts
+	TIM6->DIER |= TIM_DIER_UIE;
+	//Enable counter for Timer 6, and auto-reload preload enable
+	TIM6->CR1 |= TIM_CR1_CEN;
+	NVIC_EnableIRQ(TIM6_DAC_IRQn);
 }
 
 // INTERRUPT HANDLERS --------------------------------------------------------|
 
-void TIM6_IRQHandler(void)
+void TIM6_DAC_IRQHandler(void)
 {
 	TIM6->SR &= ~TIM_SR_UIF;	//acknowledge interrupt
+	ADC1->CR |= ADC_CR_ADSTART;
+	while((ADC1->ISR & ADC_ISR_EOC) == 0);
+	duty_cycle = ADC1->DR;
 }
